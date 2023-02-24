@@ -1,10 +1,10 @@
-from random import shuffle
 import torch
 import torch.nn as nn
+import visdom
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+
 from ae import AutoEncoder
-import visdom
 
 
 def main():
