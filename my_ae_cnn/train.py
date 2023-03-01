@@ -2,25 +2,23 @@ import datetime
 import os
 
 import torch
+from matplotlib import pyplot as plt
 from torch import nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST
-from torchvision.utils import save_image
 
 if not os.path.exists('./dc_img'):
     os.mkdir('./dc_img')
+from dataset import dataset_creat
 
-
-def to_img(x):
+'''def to_img(x):
     x = 0.5 * (x + 1)
     x = x.clamp(0, 1)
     x = x.view(x.size(0), 1, 28, 28)
-    return x
+    return x'''
 
-
-num_epochs = 100
 batch_size = 128
 learning_rate = 1e-3
 
@@ -50,9 +48,9 @@ class autoencoder(nn.Module):
             # 网络每一层的神经元个数，[1,10,1]说明只有一个隐含层，输入的变量是一个，也对应一个输出。如果是两个变量对应一个输出，那就是[2，10，1]
             # 用torch.nn.Linear构建线性层，本质上相当于构建了一个维度为[layers[0],layers[1]]的矩阵，这里面所有的元素都是权重
             nn.Flatten(),
-            nn.Linear(1 * 8 * 2 * 2, 4 * 1 * 1),
-            nn.Linear(4 * 1 * 1, 8 * 2 * 2),
-            nn.Unflatten(1, [8, 2, 2]),
+            nn.Linear(1 * 8 * 3 * 3, 4 * 2 * 2),
+            nn.Linear(4 * 2 * 2, 8 * 3 * 3),
+            nn.Unflatten(1, [8, 3, 3]),
             nn.ReLU(True)
 
         )
@@ -69,7 +67,7 @@ class autoencoder(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        # x = self.latentSpace(x)
+        x = self.latentSpace(x)
         x = self.decoder(x)
         return x
 
@@ -81,12 +79,12 @@ print(model)
 net = nn.Sequential(
     nn.Conv2d(1, 16, 3, stride=3, padding=1), nn.ReLU(True), nn.MaxPool2d(2, stride=2),
     nn.Conv2d(16, 8, 3, stride=2, padding=1), nn.ReLU(True), nn.MaxPool2d(2, stride=1),
-    nn.Flatten(), nn.Linear(1 * 8 * 2 * 2, 4 * 1 * 1), nn.Linear(4 * 1 * 1, 8 * 2 * 2), nn.Unflatten(1, [8, 2, 2]),
+    nn.Flatten(), nn.Linear(1 * 8 * 3 * 3, 4 * 2 * 2), nn.Linear(4 * 2 * 2, 8 * 3 * 3), nn.Unflatten(1, [8, 3, 3]),
     nn.ReLU(True),
     nn.ConvTranspose2d(8, 16, 3, stride=2), nn.ReLU(True),
     nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1), nn.ReLU(True),
     nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1), nn.Tanh())
-X = torch.rand(size=(1, 1, 28, 28), dtype=torch.float32)
+X = torch.rand(size=(1, 1, 40, 40), dtype=torch.float32)
 for layer in net:
     print(layer.__class__.__name__, 'output shape: \t', X.shape)
     X = layer(X)
@@ -100,25 +98,35 @@ else:
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 starttime = datetime.datetime.now()
-
+wid = 40
+long = 40
+num_epochs = 10001
+move_phase = 4
+nums = 1600
 for epoch in range(num_epochs):
-    for data in dataloader:
-        img, label = data
-        img = Variable(img)  # .cuda()
+    # for data in dataloader:
+    train_set = dataset_creat(move_phase, nums)
+    img1 = train_set[0].reshape(move_phase, nums)  ##当循环将1600个数据*4组写入数组转换为numpy时，用reshape转换的类型为（4，1600）###
+    label1 = train_set[1].reshape(move_phase, nums)
+    for i in range(move_phase):
+        img = img1[i, :].reshape(1, 1, wid, long)
+        label = label1[i, :].reshape(1, 1, wid, long)
+        img = Variable(torch.from_numpy(img).float())  # .cuda()
+        label = Variable(torch.from_numpy(label).float())  # .cuda()
         # ===================forward=====================
         output = model(img)
-        loss = criterion(output, img)
+        loss = criterion(output, label)
         # ===================backward====================
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    # ===================log========================
+        # ===================log========================
     endtime = datetime.datetime.now()
     print('epoch [{}/{}], loss:{:.4f}, time:{:.2f}s'.format(epoch + 1, num_epochs, loss.item(),
                                                             (endtime - starttime).seconds))
 
-    if epoch % 10 == 0:
-        pic = to_img(output.cpu().data)
-        save_image(pic, './dc_img/image_{}.png'.format(epoch))
-
+    if epoch % (num_epochs // 10) == 0:
+        plt.plot(range(nums), output.cpu().data.numpy().reshape(nums))
+        plt.savefig('./dc_img/image_{}.png'.format(epoch))
+        plt.close()
 # torch.save(model.state_dict(), './conv_autoencoder.pth')
