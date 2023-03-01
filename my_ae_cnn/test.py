@@ -1,31 +1,32 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from scipy.stats import norm
+from torch.autograd import Variable
 
-import train
+from my_ae_cnn.net.CNNnet import CNN
 
-num_epochs = 100
-batch_size = 128
-learning_rate = 1e-3
+# 噪声强度
+delta = 0.7
+nums = 1600
+wid = 40
+long = 40
+noise = np.random.normal(0, 1, nums)
+x = range(nums)
+y_data = []
+y_label = []
+y_labels = []
+m = np.linspace(0, 4, 4)
+####################### 原始数据和带噪声，move_phase数量组的数据 #############################
+img2 = np.load("./data_optical/optical_gnn_result.npy").reshape(200, nums)
 
-n = 15  # 15*15 225个数字图片
-digit_size = 28
-figure = np.zeros((digit_size * n, digit_size * n))  # 最终图片
-grid_x = norm.ppf(np.linspace(0.05, 0.95, n))  # 假设隐变量空间符合高斯分布
-grid_y = norm.ppf(np.linspace(0.05, 0.95, n))  # ppf随机取样
-model = train.autoencoder()
-for i, yi in enumerate(grid_x):
-    for j, xi in enumerate(grid_y):
-        z_sample = np.array([[[[xi, yi]]]], dtype=np.float32)  # 重复z_sample多次，形成一个完整的batch
-        z_sample = np.tile(z_sample, batch_size * 392).reshape(batch_size, 1, 28, 28)
-        z_sample = torch.from_numpy(z_sample)  # 转tensor
-        z_sample = z_sample.cuda()  # 放到cuda上
-        output = model(z_sample)
-        digit = output[0].reshape(digit_size, digit_size)  # 128*784->28*28
-        digit = digit.cpu().detach().numpy()  # 转numpy
-        figure[i * digit_size:(i + 1) * digit_size, j * digit_size:(j + 1) * digit_size] = digit
-
-plt.figure(figsize=(10, 10))
-plt.imshow(figure, cmap='Greys_r')
-plt.show()
+model = CNN()
+model.load_state_dict(torch.load('./model/model_cnn_param.pkl'))
+optical_gnn_result = []
+for k in range(4):
+    img_result = img2[k, :].reshape(1, 1, wid, long)
+    img_result = Variable(torch.from_numpy(img_result).float())
+    output = model(img_result)
+    output = np.argmax(output.cpu().data.numpy())
+    print(output)
+# optical_gnn_result = np.array(optical_gnn_result)
+# np.save("./results/gnn_results.npy", optical_gnn_result)
+# print(optical_gnn_result.shape)
